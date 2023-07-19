@@ -1,0 +1,133 @@
+import 'dart:developer';
+
+import 'package:flutter/cupertino.dart';
+import 'package:get/get.dart';
+import 'package:you_learnt/entities/CommonModel.dart';
+import 'package:you_learnt/features/_profile/logic.dart';
+
+import '../../../data/remote/api_requests.dart';
+import '../../../entities/SubjectModel.dart';
+import '../../../utils/error_handler/error_handler.dart';
+import '../../../utils/functions.dart';
+import '../../_auth/logic.dart';
+import '../../_main/logic.dart';
+import 'package:image_picker/image_picker.dart';
+
+class ProfileDescriptionLogic extends GetxController {
+  final ApiRequests _apiRequests = Get.find();
+  final MainLogic mainLogic = Get.find();
+  final AuthLogic authLogic = Get.find();
+  final ProfileLogic profileLogic = Get.find();
+  final TextEditingController bioController = TextEditingController();
+  final TextEditingController linkController = TextEditingController();
+  final TextEditingController customLinkController = TextEditingController();
+  final TextEditingController introduceYourSelfController = TextEditingController();
+  final TextEditingController introduceYourSelfOtherLanguageController =
+  TextEditingController();
+
+  bool isLoading = false;
+  List<SubjectModel> subjectsList = [SubjectModel()];
+
+  @override
+  onInit() {
+    initUserModel();
+    super.onInit();
+  }
+
+  void updatePersonalInformation() async {
+    isLoading = true;
+    update();
+    try {
+      var res = await _apiRequests.updateTeacherDescription(
+          bio: bioController.text,
+          publicLink: linkController.text,
+          customLink: customLinkController.text,
+          introduceYourSelf: introduceYourSelfController.text,
+          introduceYourSelfOtherLanguage: introduceYourSelfOtherLanguageController.text,
+          subject: null);
+      Get.back();
+      showMessage(res.data['message'].toString(), 1);
+      await mainLogic.getProfile();
+      initUserModel();
+    } catch (e) {
+      ErrorHandler.handleError(e);
+    }
+    isLoading = false;
+    update();
+  }
+
+  onChangeSubject(CommonModel? val, int index) {
+    subjectsList[index].selectedSubject = val;
+    subjectsList[index].subjectId = val?.id;
+    update();
+  }
+
+  void addNewSubject() {
+    subjectsList.add(SubjectModel());
+    update();
+  }
+
+  addImage(int index, int indexImage) async {
+    try {
+      XFile? image;
+      final ImagePicker _picker = ImagePicker();
+      image = await _picker.pickImage(source: ImageSource.gallery);
+      subjectsList[index].images[indexImage] = image!.path;
+      update();
+    } catch (e) {
+      log('image error => ${e.toString()}');
+    }
+  }
+
+  void initUserModel() {
+    bioController.text = mainLogic.userModel?.profile?.bio ?? '';
+    linkController.text = mainLogic.userModel?.profile?.introduceVideoLink ?? '';
+    customLinkController.text = mainLogic.userModel?.profile?.customLink ?? '';
+    introduceYourSelfController.text =
+        mainLogic.userModel?.profile?.introduceYourSelf ?? '';
+    introduceYourSelfOtherLanguageController.text =
+        mainLogic.userModel?.profile?.introduceYourSelfOtherLanguage ?? '';
+    subjectsList = mainLogic.userModel?.teacherSubject ?? [SubjectModel()];
+    for (var elements in subjectsList) {
+      for (var element in authLogic.subjectsList) {
+        if (element.id == elements.subjectId) {
+          elements.selectedSubject = element;
+        }
+      }
+    }
+    var list = <SubjectModel>[];
+    for (var element in subjectsList) {
+      if (element.id != null) list.add(element);
+    }
+    subjectsList = list;
+    Future.forEach<SubjectModel>(subjectsList, (elementSub) async {
+      await Future.forEach<String?>(elementSub.images, (elementImage) async {
+        var images = subjectsList
+            .firstWhere((element) => element.id == elementSub.id)
+            .images;
+        var index = images.indexOf(elementImage);
+        subjectsList
+            .firstWhere((element) => element.id == elementSub.id)
+            .images[subjectsList
+            .firstWhere((element) => element.id == elementSub.id)
+            .images
+            .indexOf(elementImage)] = (await urlToFile(images[index] ?? '')).path;
+      });
+    });
+  }
+
+  removeSubject(int index) {
+    subjectsList.removeAt(index);
+    update();
+  }
+
+  addNewImage(int index) {
+    subjectsList[index].images.add(null);
+    update();
+  }
+
+  addNewLink(int index) {
+    subjectsList[index].youtubeLinkControllerList.add(TextEditingController());
+    update();
+  }
+}
